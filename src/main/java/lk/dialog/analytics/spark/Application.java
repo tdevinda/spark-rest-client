@@ -16,7 +16,10 @@
 
 package lk.dialog.analytics.spark;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.wso2.msf4j.MicroservicesRunner;
+
 
 /**
  * Application entry point.
@@ -25,9 +28,12 @@ import org.wso2.msf4j.MicroservicesRunner;
  */
 public class Application {
     public static void main(String[] args) {
-        System.out.println("Polkichcha has taken flight. It will fetch shiny things for you..!");
+        Logger logger = LogManager.getLogger();
+        logger.info("Polkichcha has taken flight. It will fetch shiny things for you..!");
         new MicroservicesRunner(8080)
                 .deploy(new SparkService())
                 .start();
+
+
     }
 }

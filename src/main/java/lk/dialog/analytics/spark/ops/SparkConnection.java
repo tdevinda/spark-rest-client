@@ -3,7 +3,8 @@ package lk.dialog.analytics.spark.ops;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.*;
 
@@ -22,7 +23,7 @@ public class SparkConnection {
                 properties.getPassword());
 
 
-        logger = Logger.getLogger(getClass());
+        logger = LogManager.getLogger(getClass());
 
 
     }
@@ -32,13 +33,15 @@ public class SparkConnection {
         JsonArray result = new JsonArray();
         try {
             Statement statement = connection.createStatement();
+            logger.debug(String.format("Starting execution for query '%s...'", query.substring(0, 30)));
             ResultSet rs = statement.executeQuery(query);
+            logger.debug(String.format("Completed execution for query '%s...'", query.substring(0, 30)));
             ResultSetMetaData metaData = rs.getMetaData();
             String[] columns = new String[metaData.getColumnCount()];
             for (int i = 1; i <= columns.length; i++) {
                 columns[i - 1] = metaData.getColumnName(i);
             }
-
+            logger.debug(String.format("%d cols in response", columns.length));
             while (rs.next()) {
                 JsonObject item = new JsonObject();
                 for (String col : columns) {
@@ -50,6 +53,7 @@ public class SparkConnection {
 
             return result;
         } catch (SQLException e) {
+            logger.warn(String.format("Error occured while running query '%s...'", query.substring(0, 30)));
             e.printStackTrace();
         }
 

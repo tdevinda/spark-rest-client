@@ -1,19 +1,14 @@
 package lk.dialog.analytics.spark.ops;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import lk.dialog.analytics.spark.models.JobResponse;
-import org.apache.log4j.Logger;
-import org.eclipse.jetty.deploy.App;
-import sun.nio.ch.ThreadPool;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -35,7 +30,7 @@ public class QueryExecutor {
         resultsMap = new HashMap<>();
         executorMap = new HashMap<>();
 
-        logger = Logger.getLogger(getClass());
+        logger = LogManager.getLogger(getClass());
     }
 
 
@@ -91,9 +86,11 @@ public class QueryExecutor {
      * @return
      */
     public JobResponse getResult(Integer id) {
+        logger.debug("querying data for id=" + id);
         JobResponse data = resultsMap.get(id);
         if (data != null) {
-            resultsMap.remove(id);
+            logger.debug("data exists for id " + id);
+//            resultsMap.remove(id);
         }
 
         return data;
@@ -121,12 +118,15 @@ public class QueryExecutor {
         public void run() {
             try {
                 JsonArray output = (JsonArray) connection.execute(query);
+
                 JobResponse response = new JobResponse();
                 if(output != null) {
+                    logger.debug(String.format("[ID=%d] Got response with %d lines of content", id, output.size()));
                     response.setSuccess(true);
                     response.setTimedout(false);
                     response.setData(output);
                 } else {
+                    logger.debug(String.format("[ID=%d] Got response with no content", id));
                     response.setSuccess(false);
                     response.setTimedout(true);
                 }
