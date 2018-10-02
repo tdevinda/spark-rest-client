@@ -22,6 +22,10 @@ public class QueryExecutor {
     private Map<String, ThreadPoolExecutor> executorMap;
     private Map<Integer, JobResponse> resultsMap;
 
+    private TransientDB transientDB;
+
+
+    private static final int STAGEWISE_TRIGGERRING_HITCOUNT = 200000;
 
     private Logger logger;
     public QueryExecutor() {
@@ -30,6 +34,7 @@ public class QueryExecutor {
         resultsMap = new HashMap<>();
         executorMap = new HashMap<>();
 
+        transientDB = MongoTransientDB.getInstance();
         logger = LogManager.getLogger(getClass());
     }
 
@@ -83,16 +88,44 @@ public class QueryExecutor {
      * Fetch the results of a submitted query as a JsonElement. If the result does not
      *   exist, null will be returned.
      * @param id
+     * @param page
      * @return
      */
-    public JobResponse getResult(Integer id) {
+    public JobResponse getResult(Integer id, Integer page) {
         logger.debug("querying data for id=" + id);
-        JobResponse data = resultsMap.get(id);
-        if (data != null) {
-            logger.debug("data exists for id " + id);
-//            resultsMap.remove(id);
+
+        JobResponse data = null;
+        int hits = transientDB.getHitCount(id);
+
+        if (hits == -1) {
+            return null;
         }
 
+
+        if (page == 0) {
+            if (hits > STAGEWISE_TRIGGERRING_HITCOUNT) {
+                logger.info(String.format("Going with stages for id=%d hits=%d", id, hits));
+                data = transientDB.getData(id, 0, STAGEWISE_TRIGGERRING_HITCOUNT);
+                data.setNext(String.format("status/%d/%d", id, page + 1));
+            } else {
+                data = transientDB.getAllData(id);
+                if( data != null) {
+                    transientDB.removeData(id);
+                }
+            }
+        } else {
+            logger.debug(String.format("getting page %d for id=%d", page, id));
+            data = transientDB.getData(id,
+                    page * STAGEWISE_TRIGGERRING_HITCOUNT,
+                    STAGEWISE_TRIGGERRING_HITCOUNT);
+            if (hits > (page + 1) * STAGEWISE_TRIGGERRING_HITCOUNT) {
+                data.setNext(String.format("status/%d/%d", id, page + 1));
+            } else {
+                if (data != null) {
+                    transientDB.removeData(id);
+                }
+            }
+        }
         return data;
     }
 
@@ -131,8 +164,9 @@ public class QueryExecutor {
                     response.setTimedout(true);
                 }
 
-                resultsMap.put(id, response);
-
+//                resultsMap.put(id, response);
+                transientDB.storeData(id, response);
+                logger.debug("Stored data to db for id=" + id);
             } catch (Exception e) {
                 System.out.println("we got killed");
                 e.printStackTrace();

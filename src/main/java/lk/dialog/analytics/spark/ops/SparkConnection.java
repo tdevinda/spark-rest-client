@@ -13,6 +13,8 @@ public class SparkConnection {
     private Connection connection;
     private Logger logger;
 
+    private TransientDB transientDB;
+
     public SparkConnection(String database) throws SQLException, ClassNotFoundException {
         AppProperties properties = AppProperties.getInstance();
 
@@ -50,7 +52,7 @@ public class SparkConnection {
                 result.add(item);
 
             }
-
+            logger.debug("done adding data to structure");
             return result;
         } catch (SQLException e) {
             logger.warn(String.format("Error occured while running query '%s...'", query.substring(0, 30)));
@@ -59,5 +61,13 @@ public class SparkConnection {
 
         return null;
 
+    }
+
+    public TransientDB getTransientDB() {
+        return transientDB;
+    }
+
+    public void setTransientDB(TransientDB transientDB) {
+        this.transientDB = transientDB;
     }
 }

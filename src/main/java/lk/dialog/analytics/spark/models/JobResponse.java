@@ -7,6 +7,7 @@ public class JobResponse {
     private boolean timedout;
     private JsonArray data;
     private Integer id;
+    private String next;
 
     public boolean isSuccess() {
         return success;
@@ -38,5 +39,13 @@ public class JobResponse {
 
     public void setData(JsonArray data) {
         this.data = data;
+    }
+
+    public String getNext() {
+        return next;
+    }
+
+    public void setNext(String next) {
+        this.next = next;
     }
 }

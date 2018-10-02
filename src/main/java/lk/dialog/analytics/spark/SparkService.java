@@ -17,16 +17,12 @@
 package lk.dialog.analytics.spark;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import lk.dialog.analytics.spark.models.JobResponse;
 import lk.dialog.analytics.spark.ops.QueryExecutor;
 import org.apache.log4j.Logger;
 
 import javax.ws.rs.*;
-import javax.ws.rs.core.Response;
 import java.util.Base64;
-import java.util.logging.LogManager;
 
 /**
  * This is the Microservice resource class.
@@ -68,7 +64,7 @@ public class SparkService {
     @Produces("application/json")
     public String get(@PathParam("id")Integer id) {
 
-        JobResponse response = executor.getResult(id);
+        JobResponse response = executor.getResult(id, 0);
 
         if (response == null) {
             response = new JobResponse();
@@ -80,6 +76,22 @@ public class SparkService {
         }
 
 
+    }
+
+    @GET
+    @Path("/status/{id}/{start}")
+    @Produces("application/json")
+    public String get(@PathParam("id") Integer id, @PathParam("start") Integer start) {
+        JobResponse response = executor.getResult(id, start);
+
+        if (response == null) {
+            response = new JobResponse();
+            response.setSuccess(false);
+            return new Gson().toJson(response);
+
+        } else {
+            return new Gson().toJson(response);
+        }
     }
 
 
