@@ -18,6 +18,7 @@ public class AppProperties {
     private String password;
     private int queueSize;
     private int execTimeMin;
+    private String mongoLocation;
 
 
     private AppProperties() {
@@ -31,7 +32,7 @@ public class AppProperties {
             password = properties.getProperty("THRIFT_PASSWORD", "");
             queueSize = Integer.parseInt(properties.getProperty("JOB_QUEUE_SIZE", "20"));
             execTimeMin = Integer.parseInt(properties.getProperty("TIME_PER_QUERY_MIN", "10"));
-
+            mongoLocation = properties.getProperty("MONGO_LOCATION", "mongo.server");
 
 
         } catch (IOException e) {
@@ -61,5 +62,9 @@ public class AppProperties {
 
     public int getExecTimeMin() {
         return execTimeMin;
+    }
+
+    public String getMongoLocation() {
+        return mongoLocation;
     }
 }

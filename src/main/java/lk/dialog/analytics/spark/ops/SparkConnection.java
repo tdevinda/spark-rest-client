@@ -5,15 +5,18 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bson.Document;
 
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SparkConnection {
 
     private Connection connection;
     private Logger logger;
 
-    private TransientDB transientDB;
+    private MongoTransientDB transientDB;
 
     public SparkConnection(String database) throws SQLException, ClassNotFoundException {
         AppProperties properties = AppProperties.getInstance();
@@ -63,11 +66,65 @@ public class SparkConnection {
 
     }
 
-    public TransientDB getTransientDB() {
+
+    /**
+     * Execute the query using a transient database
+     * @param query
+     * @return
+     */
+    public boolean executeWithTransientDb(Integer Id, String query) {
+        JsonArray result = new JsonArray();
+        try {
+            Statement statement = connection.createStatement();
+            logger.debug(String.format("Starting execution for query '%s...'", query.substring(0, 30)));
+            ResultSet rs = statement.executeQuery(query);
+            logger.debug(String.format("Completed execution for query '%s...'", query.substring(0, 30)));
+
+            ResultSetMetaData metaData = rs.getMetaData();
+
+            String[] columns = new String[metaData.getColumnCount()];
+            for (int i = 1; i <= columns.length; i++) {
+                columns[i - 1] = metaData.getColumnName(i);
+            }
+
+            logger.debug(String.format("%d cols in response", columns.length));
+
+            List<Document> jsonElements = new ArrayList<>();
+
+            while (rs.next()) {
+                Document document = new Document();
+                for (String col : columns) {
+                    document.put(col, rs.getString(col));
+                }
+                document.put("id", Id);
+
+                jsonElements.add(document);
+                if (jsonElements.size() == 10000) {
+                    transientDB.addData(Id, jsonElements);
+                    jsonElements.clear();
+                    logger.debug("added 10000 cols");
+                }
+
+
+            }
+            //flush out any leftovers
+            System.out.println("adding leftover "+ jsonElements.size());
+            transientDB.addData(Id, jsonElements);
+            logger.debug("done adding data to structure");
+            return true;
+        } catch (SQLException e) {
+            logger.warn(String.format("Error occured while running query '%s...'", query.substring(0, 30)));
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+    public MongoTransientDB getTransientDB() {
         return transientDB;
     }
 
-    public void setTransientDB(TransientDB transientDB) {
+    public void setTransientDB(MongoTransientDB transientDB) {
         this.transientDB = transientDB;
     }
 }
