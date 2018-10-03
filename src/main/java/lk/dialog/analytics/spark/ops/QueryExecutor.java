@@ -1,6 +1,5 @@
 package lk.dialog.analytics.spark.ops;
 
-import com.google.gson.JsonArray;
 import lk.dialog.analytics.spark.models.JobResponse;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,11 +17,9 @@ import java.util.concurrent.TimeUnit;
 public class QueryExecutor {
 
     private Map<String, SparkConnection> connectionMap;
-    private Map<String, Boolean> statusMap;
     private Map<String, ThreadPoolExecutor> executorMap;
-    private Map<Integer, JobResponse> resultsMap;
 
-    private TransientDB transientDB;
+    private MongoTransientDB transientDB;
 
 
     private static final int STAGEWISE_TRIGGERRING_HITCOUNT = 200000;
@@ -30,8 +27,6 @@ public class QueryExecutor {
     private Logger logger;
     public QueryExecutor() {
         connectionMap = new HashMap<>();
-        statusMap = new HashMap<>();
-        resultsMap = new HashMap<>();
         executorMap = new HashMap<>();
 
         transientDB = MongoTransientDB.getInstance();
@@ -98,6 +93,7 @@ public class QueryExecutor {
         int hits = transientDB.getHitCount(id);
 
         if (hits == -1) {
+            logger.info("No hits for id=" + id);
             return null;
         }
 
@@ -138,34 +134,27 @@ public class QueryExecutor {
         private Integer id;
         private String query;
         private SparkConnection connection;
-        private String dbName;
 
         public QueryThread(Integer id, String query, SparkConnection connection, String dbName) {
             this.id = id;
             this.query = query;
             this.connection = connection;
-            this.dbName = dbName;
         }
 
         @Override
         public void run() {
             try {
-                JsonArray output = (JsonArray) connection.execute(query);
-
                 JobResponse response = new JobResponse();
-                if(output != null) {
-                    logger.debug(String.format("[ID=%d] Got response with %d lines of content", id, output.size()));
-                    response.setSuccess(true);
-                    response.setTimedout(false);
-                    response.setData(output);
-                } else {
-                    logger.debug(String.format("[ID=%d] Got response with no content", id));
-                    response.setSuccess(false);
-                    response.setTimedout(true);
-                }
+                connection.setTransientDB(transientDB);
 
+                boolean result = connection.executeWithTransientDb(id, query);
+                response.setId(id);
+                response.setSuccess(result);
+                response.setTimedout(false);
+
+                transientDB.addMetaInfo(response);
 //                resultsMap.put(id, response);
-                transientDB.storeData(id, response);
+
                 logger.debug("Stored data to db for id=" + id);
             } catch (Exception e) {
                 System.out.println("we got killed");
@@ -173,7 +162,7 @@ public class QueryExecutor {
                 JobResponse response = new JobResponse();
                 response.setSuccess(true);
                 response.setTimedout(false);
-                resultsMap.put(id, response);
+                transientDB.addMetaInfo(response);
             }
         }
 

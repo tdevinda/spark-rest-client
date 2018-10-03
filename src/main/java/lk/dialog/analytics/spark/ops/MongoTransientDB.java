@@ -1,20 +1,21 @@
 package lk.dialog.analytics.spark.ops;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import com.mongodb.MongoClient;
-import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import lk.dialog.analytics.spark.models.JobResponse;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bson.Document;
 
-import java.util.ArrayList;
 import java.util.List;
 
-public class MongoTransientDB implements TransientDB{
+public class MongoTransientDB{
     private static MongoTransientDB ourInstance = new MongoTransientDB();
 
     public static MongoTransientDB getInstance() {
@@ -26,16 +27,16 @@ public class MongoTransientDB implements TransientDB{
     private MongoClient client;
     private MongoDatabase mongoDatabase;
     MongoCollection<Document> collection;
+    MongoCollection<Document> metaCollection;
 
     private MongoTransientDB() {
-        client = new MongoClient("localhost");
+        client = new MongoClient(AppProperties.getInstance().getMongoLocation());
         mongoDatabase = client.getDatabase("polkichcha");
         collection = mongoDatabase.getCollection("pktrans");
-
+        metaCollection = mongoDatabase.getCollection("pkmeta");
         logger = LogManager.getLogger(getClass());
     }
 
-    @Override
     public void storeData(Integer id, JobResponse data) {
         logger.debug("Starting to add data to db for id=" + id);
         Document doc = Document.parse(new Gson().toJson(data));
@@ -44,55 +45,105 @@ public class MongoTransientDB implements TransientDB{
         logger.debug("Completed adding data to db for id=" + id);
     }
 
-    @Override
     public JobResponse getAllData(Integer id) {
-        Document doc = new Document("id", id);
-        FindIterable<Document> result = collection.find(doc);
-        String out = result.iterator().next().toJson();
-        return new Gson().fromJson(out, JobResponse.class);
-    }
+        JobResponse response = new JobResponse();
+        response.setId(id);
 
-    @Override
-    public JobResponse getData(Integer id, Integer from, Integer to) {
-        Document doc = new Document("id", id);
-        Document slice = new Document();
-        List<Integer> range = new ArrayList<>();
-        range.add(from);
-        range.add(to);
-        slice.append("$slice", range);
-        Document filter = new Document("data", slice);
+        Document metaDoc = new Document("id", id);
+        FindIterable<Document> metaIterable = metaCollection.find(metaDoc);
+        if (metaIterable.iterator().hasNext()) {
+            logger.debug("Found metadata. looking for data");
+            //there is data.
+            Document projection = new Document();
+            projection.put("id", 0);
+            projection.put("_id", 0);
+            FindIterable<Document> data = collection.find(metaDoc).projection(projection);
 
-        FindIterable<Document> results = collection.find(doc).projection(filter);
-        if (results.iterator().hasNext()) {
-            return null;
+            response.setSuccess(true);
+            response.setTimedout(false);
+
+            JsonArray jsonArray = new JsonArray();
+            JsonParser parser = new JsonParser();
+            MongoCursor<Document> iterator = data.iterator();
+            while (iterator.hasNext()) {
+                Document record = iterator.next();
+                jsonArray.add(parser.parse(record.toJson()));
+            }
+            response.setData(jsonArray);
+
+
         } else {
-            String out = results.iterator().next().toJson();
-            return new Gson().fromJson(out, JobResponse.class);
+            response.setSuccess(false);
+            response.setTimedout(false);
         }
+
+        return response;
+
+
     }
 
-    @Override
+    public void addData(Integer id, List<Document> data) {
+        collection.insertMany(data);
+
+    }
+
+    public void addMetaInfo(JobResponse jobResponse) {
+        Document document = new Document();
+        document.put("success", jobResponse.isSuccess());
+        document.put("timedout", jobResponse.isTimedout());
+        document.put("id", jobResponse.getId());
+
+        metaCollection.insertOne(document);
+    }
+
+    public JobResponse getData(Integer id, Integer from, Integer next) {
+        JobResponse response = new JobResponse();
+        response.setId(id);
+
+        Document metaDoc = new Document("id", id);
+        FindIterable<Document> metaIterable = metaCollection.find(metaDoc);
+        if (metaIterable.iterator().hasNext()) {
+            logger.debug("Found metadata. looking for data");
+            //there is data.
+            Document projection = new Document();
+            projection.put("id", 0);
+            projection.put("_id", 0);
+            FindIterable<Document> data = collection.find(metaDoc).projection(projection).skip(from).limit(next);
+
+            response.setSuccess(true);
+            response.setTimedout(false);
+
+            JsonArray jsonArray = new JsonArray();
+            JsonParser parser = new JsonParser();
+            MongoCursor<Document> iterator = data.iterator();
+            while (iterator.hasNext()) {
+                Document record = iterator.next();
+                jsonArray.add(parser.parse(record.toJson()));
+            }
+            response.setData(jsonArray);
+
+
+        } else {
+            response.setSuccess(false);
+            response.setTimedout(false);
+        }
+
+        return response;
+
+
+    }
+
     public Integer getHitCount(Integer id) {
-        List<Document> aggregations = new ArrayList<>();
-        Document match = new Document("$match", new Document("id", id));
-
-        Document project = new Document();
-//        project.append("_id", 0);
-        project.append("$project", new Document("len", new Document("$size", "$data")));
-
-        aggregations.add(match);
-        aggregations.add(project);
-
-        AggregateIterable<Document> result = collection.aggregate(aggregations);
-        if (result.iterator().hasNext()) {
-            return result.iterator().next().getInteger("len");
+        Document countDocument = new Document("id", id);
+        FindIterable<Document> findIterable = metaCollection.find(countDocument);
+        if (findIterable.iterator().hasNext()) {
+            long size = collection.count(countDocument);
+            return (int) size;
         } else {
             return -1;
         }
-
     }
 
-    @Override
     public void removeData(Integer id) {
 
     }
